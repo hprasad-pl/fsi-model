@@ -5,11 +5,18 @@
 #include <iostream>
 #include <stdio.h>
 #include <vector>
+#include <TCanvas.h>
+#include <TPad.h>
+#include <TString.h>
+
 
 
 void SetHistAttributes(TH1D *h, TString xlabel, TString ylabel, int linestyle, int linecolor, int linewidth);
 void SetCanvasAttributes(TCanvas *c);
 TLegend* CreateLegendAutoPosition(TH1* hist, const char* header = "");
+TCanvas* CreateCanvas(const char* name, const char* title, Int_t width, Int_t height, Color_t backgroundColor = kWhite);
+TCanvas* CreateCanvas(const char* name, const char* title, Int_t width, Int_t height, Int_t nPads = 1, const char* divisionMode = "tile", Double_t padSpacing = 0.01, Color_t backgroundColor = kWhite);
+
 
 void analyze4()
 {
@@ -39,7 +46,8 @@ void analyze4()
   SetHistAttributes(h[0], xlabel, ylabel, LineStyles::Solid, Colors::kBlack1, 3);
   SetHistAttributes(h[1], xlabel, ylabel, LineStyles::Dashed, Colors::kMagenta1, 3);
 
-  TCanvas *c = new TCanvas("c", "Comparison of reweighted events", 1000, 1000);
+  TCanvas *c = CreateCanvas("c", "Distribution", 1000, 1000, kGray);
+
   SetCanvasAttributes(c);
   h[0]->Draw("HIST");
   h[1]->Draw("HIST, SAME");
@@ -102,21 +110,15 @@ TLegend* CreateLegendAutoPosition(TH1* hist, const char* header = "") {
         return nullptr;
     }
 
-    // Get the coordinates of the plot box (frame)
-    Double_t x1 = pad->GetUxmin(); // Left edge of the plot box
-    Double_t x2 = pad->GetUxmax(); // Right edge of the plot box
-    Double_t y1 = pad->GetUymin(); // Bottom edge of the plot box
-    Double_t y2 = pad->GetUymax(); // Top edge of the plot box
+    // Define the legend position in NDC coordinates (top-right corner)
+    Double_t legendWidth = 0.2; // Width of the legend (20% of canvas width)
+    Double_t legendHeight = 0.15; // Height of the legend (15% of canvas height)
+    Double_t legendX1 = 0.75; // X1 position (75% from left)
+    Double_t legendY1 = 0.75; // Y1 position (75% from bottom)
+    Double_t legendX2 = legendX1 + legendWidth; // X2 position
+    Double_t legendY2 = legendY1 + legendHeight; // Y2 position
 
-    // Define the legend position (top-right corner)
-    Double_t legendWidth = 0.2 * (x2 - x1); // Width of the legend (20% of plot width)
-    Double_t legendHeight = 0.15 * (y2 - y1); // Height of the legend (15% of plot height)
-    Double_t legendX1 = x2 - legendWidth - 0.05 * (x2 - x1); // X1 position (5% padding from right)
-    Double_t legendY1 = y2 - legendHeight - 0.05 * (y2 - y1); // Y1 position (5% padding from top)
-    Double_t legendX2 = x2 - 0.05 * (x2 - x1); // X2 position (5% padding from right)
-    Double_t legendY2 = y2 - 0.05 * (y2 - y1); // Y2 position (5% padding from top)
-
-    // Create a TLegend object with the calculated coordinates
+    // Create a TLegend object with the calculated NDC coordinates
     TLegend* legend = new TLegend(legendX1, legendY1, legendX2, legendY2);
 
     // Set the font to "132" (bold, italic, Times)
@@ -155,4 +157,76 @@ TLegend* CreateLegendAutoPosition(TH1* hist, const char* header = "") {
     legend->SetLineWidth(1); // Adjust as needed
 
     return legend;
+}
+
+// Function to create and return a TCanvas pointer
+TCanvas* CreateCanvas(const char* name, const char* title, Int_t width, Int_t height, Color_t backgroundColor = kWhite) {
+    // Create a new TCanvas object with the specified parameters
+    TCanvas* canvas = new TCanvas(name, title, width, height);
+
+    // Set the background color
+    canvas->SetFillColor(backgroundColor);
+
+    // Customize the canvas (optional)
+    canvas->SetGrid(); // Enable grid
+    canvas->SetRightMargin(0.05); // Adjust margins
+    canvas->SetLeftMargin(0.10);
+    canvas->SetTopMargin(0.05);
+    canvas->SetBottomMargin(0.10);
+
+    // Return the pointer to the created canvas
+    return canvas;
+}
+
+TCanvas* CreateCanvas(const char* name, const char* title, Int_t width, Int_t height, Int_t nPads = 1, const char* divisionMode = "tile", Double_t padSpacing = 0.0, Color_t backgroundColor = kWhite) {
+    // Create a new TCanvas object with the specified parameters
+    TCanvas* canvas = new TCanvas(name, title, width, height);
+
+    // Set the background color
+    canvas->SetFillColor(backgroundColor);
+
+    // Divide the canvas into pads based on the number of pads and division mode
+    if (nPads > 1) {
+        Int_t nRows = 1, nCols = 1;
+
+        // Determine the number of rows and columns based on the division mode
+        if (TString(divisionMode) == "horizontal") {
+            nRows = 1;
+            nCols = nPads;
+        } else if (TString(divisionMode) == "vertical") {
+            nRows = nPads;
+            nCols = 1;
+        } else if (TString(divisionMode) == "tile") {
+            nRows = TMath::CeilNint(TMath::Sqrt(nPads)); // Square root for tiling
+            nCols = TMath::CeilNint((Double_t)nPads / nRows);
+        } else {
+            std::cerr << "Error: Invalid division mode. Using 'tile' as default." << std::endl;
+            nRows = TMath::CeilNint(TMath::Sqrt(nPads));
+            nCols = TMath::CeilNint((Double_t)nPads / nRows);
+        }
+
+        // Divide the canvas into sub-pads
+        canvas->Divide(nCols, nRows, padSpacing, padSpacing);
+
+        // Customize the sub-pads (optional)
+        for (Int_t i = 1; i <= nPads; i++) {
+            TPad* pad = (TPad*)canvas->cd(i); // Get the i-th pad
+            pad->SetFillColor(backgroundColor); // Set the background color
+            pad->SetGrid(); // Enable grid
+            pad->SetRightMargin(0.05); // Adjust margins
+            pad->SetLeftMargin(0.10);
+            pad->SetTopMargin(0.05);
+            pad->SetBottomMargin(0.10);
+        }
+    } else {
+        // Customize the single pad (optional)
+        canvas->SetGrid(); // Enable grid
+        canvas->SetRightMargin(0.05); // Adjust margins
+        canvas->SetLeftMargin(0.10);
+        canvas->SetTopMargin(0.05);
+        canvas->SetBottomMargin(0.10);
+    }
+
+    // Return the pointer to the created canvas
+    return canvas;
 }
